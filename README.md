@@ -3,6 +3,7 @@ Laravel projects deploy made easy and fast using Envoy task runner and this scri
 Inspired by [sajadabasi/auto-deploy-scripts](https://github.com/sajadabasi/auto-deploy-scripts).
 
 - This script will provide a zero-downtime deployment.
+- Safe to run. All changes will revert if script fails.
 - You can config and change almost everything.
 - You'll be notified how many seconds your deploy took at the end.
 - Very easy to use. Start deploy just with one command.
