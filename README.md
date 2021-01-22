@@ -5,7 +5,7 @@ Inspired by [sajadabasi/auto-deploy-scripts](https://github.com/sajadabasi/auto-
 ### Install Envoy
 Documentation for Envoy can be found on the [Laravel website](https://laravel.com/docs/8.x/envoy).
 ### Add Files
-Add `deploy.env` and `envoy.blade.php` to your Laravel root project.
+Add `deploy.env` and `envoy.blade.php` to your Laravel project's root.
 ### Run
 Run deploy script using this command :
 
