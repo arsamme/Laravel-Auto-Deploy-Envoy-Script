@@ -41,3 +41,4 @@ You can change config variables in `deploy.env` file.
 | STORAGE_SYMLINK          | NO       | Set whether to create storage symlink in `public` folder or not, this uses `artisan` command    | Boolean | true    |                                                   |
 | CONFIG_CACHE             | NO       | Set whether to run `artisan` cache commands or not                                              | Boolean | true    |                                                   |
 | EXTRA_BASH_SCRIPT        | NO       | Extra bash script to run at end of deploy, inside deploy path                                   | String  |         | ls -la                                            |
+| BACKUP_OLD_BUILD         | NO       | Set whether to save backup of old build or not                                                  | Boolean | false   |                                                   |
