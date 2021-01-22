@@ -9,10 +9,11 @@ echo $e->getMessage();
 exit;
 }
 
-if (! function_exists('evalBool')) {
-function evalBool($value) {
-return strcasecmp($value, 'true') ? false : true;
+function arsBool($value) {
+if(is_bool($value)){
+return $value;
 }
+return strcasecmp($value, 'true') ? false : true;
 }
 
 $gitRepo = $_ENV['GIT_REPOSITORY'];
@@ -27,17 +28,19 @@ $storagePath = $_ENV['DEPLOY_STORAGE_PATH'];
 $user = $_ENV['USER'] ?? "root";
 $userGroup = $_ENV['USER_GROUP'] ?? "root";
 
-$composerInstall = evalBool($_ENV['COMPOSER_INSTALL']);
-$createEnvFile = evalBool($_ENV['CREATE_ENV_FILE']);
-$generateApplicationKey = evalBool($_ENV['GENERATE_APPLICATION_KEY']);
-$npmInstall = evalBool($_ENV['NPM_INSTALL']);
-$npmRunProd = evalBool($_ENV['NPM_RUN_PROD']);
-$databaseMigration = evalBool($_ENV['DATABASE_MIGRATION']);
-$databaseSeed = evalBool($_ENV['DATABASE_SEED']);
-$storageSymlink = evalBool($_ENV['STORAGE_SYMLINK']);
-$configCache = evalBool($_ENV['CONFIG_CACHE']);
+$composerInstall = arsBool($_ENV['COMPOSER_INSTALL'] ?? true);
+$createEnvFile = arsBool($_ENV['CREATE_ENV_FILE'] ?? true);
+$generateApplicationKey = arsBool($_ENV['GENERATE_APPLICATION_KEY'] ?? true);
+$npmInstall = arsBool($_ENV['NPM_INSTALL'] ?? true);
+$npmRunProd = arsBool($_ENV['NPM_RUN_PROD'] ?? true);
+$databaseMigration = arsBool($_ENV['DATABASE_MIGRATION'] ?? false);
+$databaseSeed = arsBool($_ENV['DATABASE_SEED'] ?? false);
+$storageSymlink = arsBool($_ENV['STORAGE_SYMLINK'] ?? true);
+$configCache = arsBool($_ENV['CONFIG_CACHE'] ?? true);
 
 $extraBashScript = $_ENV['EXTRA_BASH_SCRIPT'] ?? null;
+
+$backupOldBuild = arsBool($_ENV['BACKUP_OLD_BUILD'] ?? false);
 
 if (substr($deployPath, 0, 1) !== "/") throw new Exception('Careful - your deployment path does not begin with /');
 @endsetup
@@ -45,6 +48,47 @@ if (substr($deployPath, 0, 1) !== "/") throw new Exception('Careful - your deplo
 @servers(['web' => $server])
 
 @task("deploy")
+# Revert changes on error
+function revertChanges {
+printf "\033[0;31mSomething went wrong. Reverting changes...\033[0m\n"
+
+if [ ! -z "${NEW_BUILD+x}" ] && [ -d "${NEW_BUILD}" ]; then
+rm -rf "${NEW_BUILD}"
+fi
+
+if [ ! -z "${NEW_BUILD_BACKUP+x}" ] && [ -d "${NEW_BUILD_BACKUP}" ]; then
+mv "${NEW_BUILD_BACKUP}" "${NEW_BUILD}"
+setPermissions "${NEW_BUILD}"
+fi
+
+if [ ! -z "${OLD_BUILD_BACKUP+x}" ] && [ ! -z "${OLD_BUILD_ORIG+x}" ] && [ -d "${OLD_BUILD_BACKUP}" ] || [ -f "${OLD_BUILD_BACKUP}" ]; then
+mv "${OLD_BUILD_BACKUP}" "${OLD_BUILD_ORIG}"
+setPermissions "${OLD_BUILD_ORIG}"
+fi
+
+if [ ! -z "${DESTINATION_PATH_BACKUP+x}" ] && [ ! -z "${DESTINATION_PATH_ORIG+x}" ] && [ -d "${DESTINATION_PATH_BACKUP}" ] || [ -f "${DESTINATION_PATH_BACKUP}" ]; then
+rm -rf "${DESTINATION_PATH_ORIG}"
+mv "${DESTINATION_PATH_BACKUP}" "${DESTINATION_PATH_ORIG}"
+setPermissions "${DESTINATION_PATH_ORIG}"
+else
+if [ ! -z "${IS_DESTINATION_PATH_SYMLINK+x}" ] && [ ! -z "${DESTINATION_SYMLINK_TARGET+x}" ]; then
+rm -rf "${DESTINATION_PATH_ORIG}"
+ln -s "${DESTINATION_SYMLINK_TARGET}" "${DESTINATION_PATH_ORIG}"
+fi
+fi
+
+printf "\033[0;32mChanges reverted.\033[0m\n"
+}
+
+# Set file and folder permissions
+function setPermissions {
+SELECTED_PATH="$1"
+
+chown -R "{{$user}}":"{{$userGroup}}" "${SELECTED_PATH}"
+find "${SELECTED_PATH}" -type d -exec chmod 775 {} \;
+find "${SELECTED_PATH}" -type f -exec chmod 664 {} \;
+}
+
 # Echo connected message
 IPADDR=$(ip addr show | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}' | cut -d/ -f1)
 printf "\033[0;32mConnected to %s\033[0m\n" "$IPADDR"
@@ -52,8 +96,11 @@ printf "\033[0;32mConnected to %s\033[0m\n" "$IPADDR"
 # Set start time
 DEPLOY_START=$(date +%s)
 
-# Exit on commands failure
+# Exit on commands failure and call revertChanges
 set -e
+trap revertChanges ERR
+trap revertChanges SIGINT
+trap revertChanges SIGTERM
 
 # Set new build directory
 BUILD1={{$deployPath}}"/build1"
@@ -65,7 +112,14 @@ else
 NEW_BUILD=$BUILD1
 OLD_BUILD=$BUILD2
 fi
+if [ -d $NEW_BUILD ] || [ -f $NEW_BUILD ]; then
+NEW_BUILD_ORIG_PATH=${NEW_BUILD%/}
+NOW=$(date +%s)
+NEW_BUILD_BACKUP="${NEW_BUILD_ORIG_PATH}_new_${NOW}_backup"
+mv "$NEW_BUILD" "$NEW_BUILD_BACKUP"
+setPermissions "${NEW_BUILD_BACKUP}";
 rm -rf "$NEW_BUILD"
+fi
 mkdir "$NEW_BUILD"
 cd "$NEW_BUILD"
 printf "\033[0;32mSelected build directory : %s \033[0m\n" "$NEW_BUILD"
@@ -130,7 +184,7 @@ rm -rf storage
 else
 mv storage "{{$storagePath}}"
 fi
-ln -s "{{$storagePath}}" ./
+ln -s "{{$storagePath}}" ./storage
 
 # Create storage symlink in public folder using artisan command
 @if($storageSymlink===true)
@@ -139,15 +193,10 @@ ln -s "{{$storagePath}}" ./
 @endif
 
 # Set file and folder permissions
-chown -R "{{$user}}":"{{$userGroup}}" "$(pwd)"
-chown -R "{{$user}}":"{{$userGroup}}" "$(pwd)"
-find "$(pwd)" -type d -exec chmod 775 {} \;
-find "$(pwd)" -type f -exec chmod 664 {} \;
+setPermissions "$(pwd)";
 
 # Set file and folder permissions of storage folder
-chown -R "{{$user}}":"{{$userGroup}}" "{{$storagePath}}"
-find "{{$storagePath}}" -type d -exec chmod 775 {} \;
-find "{{$storagePath}}" -type f -exec chmod 664 {} \;
+setPermissions "{{$storagePath}}";
 
 # Execute Laravel cache commands
 @if($configCache===true)
@@ -169,11 +218,39 @@ find "{{$storagePath}}" -type f -exec chmod 664 {} \;
 cd "{{$deployPath}}"
 
 # Create symlink of build directory
+if [ -d {{$destinationPath}} ] || [ -f {{$destinationPath}} ]; then
+if [ -L {{$destinationPath}} ]; then
+IS_DESTINATION_PATH_SYMLINK=true
+DESTINATION_PATH_ORIG={{$destinationPath}}
+DESTINATION_SYMLINK_TARGET=$(readlink -f {{$destinationPath}})
+else
+DESTINATION_PATH_ORIG={{$destinationPath}}
+DESTINATION_PATH_ORIG=${DESTINATION_PATH_ORIG%/}
+NOW=$(date +%s)
+DESTINATION_PATH_BACKUP="${DESTINATION_PATH_ORIG}_destination_${NOW}_backup"
+mv "$DESTINATION_PATH_ORIG" "$DESTINATION_PATH_BACKUP"
+setPermissions "${DESTINATION_PATH_BACKUP}";
+fi
+fi
 rm -rf "{{$destinationPath}}"
 ln -sf "$NEW_BUILD" "{{$destinationPath}}"
 
 # Delete old build directory
-rm -rf "$OLD_BUILD"
+OLD_BUILD_ORIG="${OLD_BUILD%/}"
+NOW=$(date +%s)
+OLD_BUILD_BACKUP="${OLD_BUILD_ORIG}_old_${NOW}_backup"
+mv "$OLD_BUILD_ORIG" "$OLD_BUILD_BACKUP"
+setPermissions "${OLD_BUILD_BACKUP}";
+
+@if($backupOldBuild===false)
+    if [ ! -z "${OLD_BUILD_BACKUP+x}" ] && [ -d "${OLD_BUILD_BACKUP}" ] || [ -f "${OLD_BUILD_BACKUP}" ]; then
+    rm -rf "${OLD_BUILD_BACKUP}"
+    fi
+
+    if [ ! -z "${NEW_BUILD_BACKUP+x}" ] && [ -d "${NEW_BUILD_BACKUP}" ] || [ -f "${NEW_BUILD_BACKUP}" ]; then
+    rm -rf "${NEW_BUILD_BACKUP}"
+    fi
+@endif
 
 DEPLOY_END=$(date +%s)
 DEPLOY_TIME=$((DEPLOY_END - DEPLOY_START))
