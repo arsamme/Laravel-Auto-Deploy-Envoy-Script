@@ -22,6 +22,8 @@ $gitBranch = $_ENV['GIT_BRANCH'] ?? "master";
 $server = $_ENV['DEPLOY_SERVER'];
 
 $deployPath = rtrim($_ENV['DEPLOY_PATH'], "/");
+if (substr($deployPath, 0, 1) !== "/") throw new Exception('Careful - your deployment path does not begin with /');
+
 $destinationPath = rtrim($_ENV['DEPLOY_DESTINATION_PATH'], "/");
 $storagePath = $_ENV['DEPLOY_STORAGE_PATH'];
 
@@ -38,11 +40,17 @@ $databaseSeed = arsBool($_ENV['DATABASE_SEED'] ?? false);
 $storageSymlink = arsBool($_ENV['STORAGE_SYMLINK'] ?? true);
 $configCache = arsBool($_ENV['CONFIG_CACHE'] ?? true);
 
-$extraBashScript = $_ENV['EXTRA_BASH_SCRIPT'] ?? null;
+$extraBashScript = $_ENV['EXTRA_BASH_SCRIPT'];
 
 $backupOldBuild = arsBool($_ENV['BACKUP_OLD_BUILD'] ?? false);
 
-if (substr($deployPath, 0, 1) !== "/") throw new Exception('Careful - your deployment path does not begin with /');
+$telegramBotApiToken = $_ENV['TELEGRAM_BOT_API_TOKEN'];
+$telegramChatId = $_ENV['TELEGRAM_CHAT_ID'];
+
+$discordWebhookUrl = $_ENV['DISCORD_WEBHOOK_URL'];
+
+$slackWebhookUrl = $_ENV['SLACK_WEBHOOK_URL'];
+$slackChannel = $_ENV['SLACK_CHANNEL'];
 @endsetup
 
 @servers(['web' => $server])
@@ -256,3 +264,17 @@ DEPLOY_END=$(date +%s)
 DEPLOY_TIME=$((DEPLOY_END - DEPLOY_START))
 printf "\033[0;32mDeploy took %s seconds.\033[0m\n" $DEPLOY_TIME
 @endtask
+
+@finished
+if(!empty($telegramBotApiToken) && !empty($telegramChatId)) {
+    @telegram($telegramBotApiToken, $telegramChatId)
+}
+
+if(!empty($discordWebhookUrl)) {
+@discord($discordWebhookUrl)
+}
+
+if(!empty($slackWebhookUrl) && !empty($slackChannel)) {
+@slack($slackWebhookUrl, $slackChannel)
+}
+@endfinished
