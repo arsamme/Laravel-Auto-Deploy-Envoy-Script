@@ -4,8 +4,9 @@ Inspired by [sajadabasi/auto-deploy-scripts](https://github.com/sajadabasi/auto-
 
 - This script will provide a zero-downtime deployment.
 - Safe to run. All changes will revert if script fails.
+- Notifications. You can set services like Telegram, Slack and Discord webhooks to get notification when deploy finishes.
 - You can config and change almost everything.
-- You'll be notified how many seconds your deploy took at the end.
+- Prints how much deploy took time.
 - Very easy to use. Start deploy just with one command.
 
 
@@ -43,3 +44,8 @@ You can change config variables in `deploy.env` file.
 | CONFIG_CACHE             | NO       | Set whether to run `artisan` cache commands or not                                              | Boolean | true    |                                                   |
 | EXTRA_BASH_SCRIPT        | NO       | Extra bash script to run at end of deploy, inside deploy path                                   | String  |         | ls -la                                            |
 | BACKUP_OLD_BUILD         | NO       | Set whether to save backup of old build or not                                                  | Boolean | false   |                                                   |
+| TELEGRAM_BOT_API_TOKEN   | NO       | Telegram bot api token used to send notifiation on task finish                                  | String  | false   | 1248907810:AAFVU6ubAVjdasdac3uIwf8s8WGHPKSL4      |
+| TELEGRAM_CHAT_ID         | NO       | Telegram chat id for sending finished ntification to. Can be channel username of chat id.       | String  | false   | @arsamme                                          |
+| DISCORD_WEBHOOK_URL      | NO       | Discord webhook url to send finished notification.                                              | Boolean | false   |                                                   |
+| SLACK_WEBHOOK_URL        | NO       | Slack webhook url t send finished notification.                                                 | Boolean | false   |                                                   |
+| SLACK_CHANNEL            | NO       | Define which channel you want to receive notifications in stock.                                | Boolean | false   |                                                   |
